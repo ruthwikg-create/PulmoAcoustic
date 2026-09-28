@@ -23,7 +23,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -35,11 +37,15 @@ import androidx.core.content.ContextCompat
 import com.ruthwik.pulmoacoustic.audio.AcousticEngine
 import com.ruthwik.pulmoacoustic.model.*
 import com.ruthwik.pulmoacoustic.sensors.DeviceSensors
+import com.ruthwik.pulmoacoustic.signal.LiveRespiratoryTracker
+import com.ruthwik.pulmoacoustic.signal.LiveSnapshot
 import com.ruthwik.pulmoacoustic.signal.RespiratorySignalProcessor
 import com.ruthwik.pulmoacoustic.storage.MeasurementStore
 import com.ruthwik.pulmoacoustic.ui.theme.PulmoTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
 private enum class Screen(val label: String) {
@@ -130,6 +136,7 @@ private fun PulmoApp(
     val engine = remember { AcousticEngine() }
     val processor = remember { RespiratorySignalProcessor() }
     val sensors = remember { DeviceSensors(context) }
+    val liveTracker = remember { LiveRespiratoryTracker(processor) }
     val store = remember { MeasurementStore(context) }
     val prefs = remember { context.getSharedPreferences("pulmo_settings", 0) }
     val deviceKey = remember { android.os.Build.MANUFACTURER + ":" + android.os.Build.MODEL }
@@ -141,15 +148,19 @@ private fun PulmoApp(
     var carrier by remember { mutableStateOf(prefs.getFloat("carrier_hz", 19000f).toDouble()) }
     var gain by remember { mutableStateOf(prefs.getFloat("gain", 0.04f)) }
     var calibrated by remember { mutableStateOf(prefs.getString("calibrated_device", "") == deviceKey) }
+    var scanComplete by remember { mutableStateOf(prefs.getBoolean("scan_complete", false)) }
     var autoOptimize by remember { mutableStateOf(prefs.getBoolean("auto_optimize", true)) }
     var researchCapture by remember { mutableStateOf(prefs.getBoolean("research_capture", false)) }
     var durationSec by remember { mutableStateOf(prefs.getInt("duration_sec", 45).coerceIn(30, 60)) }
-    var bestPosition by remember { mutableStateOf("Not scanned") }
-    var bestOrientation by remember { mutableStateOf("Not scanned") }
+    var bestPosition by remember { mutableStateOf(prefs.getString("best_position", "Not scanned") ?: "Not scanned") }
+    var bestOrientation by remember { mutableStateOf(prefs.getString("best_orientation", "Not scanned") ?: "Not scanned") }
     var status by remember { mutableStateOf("Ready for setup") }
     var progress by remember { mutableStateOf(0f) }
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<RespiratoryResult?>(null) }
+    var liveSnapshot by remember { mutableStateOf(LiveSnapshot.empty()) }
+    var sessionStage by remember { mutableStateOf("Ready") }
+    val stopRequested = remember { AtomicBoolean(false) }
 
     val history = remember { mutableStateListOf<RespiratoryResult>() }
     val scanResults = remember { mutableStateListOf<ScanPoint>() }
@@ -160,8 +171,20 @@ private fun PulmoApp(
 
     DisposableEffect(Unit) {
         sensors.start()
+        history.clear()
         history.addAll(store.loadNewest())
         onDispose { sensors.stop() }
+    }
+
+    LaunchedEffect(busy) {
+        if (busy) {
+            while (busy) {
+                liveSnapshot = liveTracker.snapshot()
+                delay(120)
+            }
+        } else {
+            liveSnapshot = liveTracker.snapshot()
+        }
     }
 
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
