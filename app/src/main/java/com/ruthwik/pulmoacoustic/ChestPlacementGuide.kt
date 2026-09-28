@@ -56,6 +56,10 @@ internal fun ChestPlacementGuide(
         label = "pulse"
     )
     val zone = chestZones[selected.coerceIn(chestZones.indices)]
+    val outline = MaterialTheme.colorScheme.onSurface
+    val subtle = MaterialTheme.colorScheme.onSurfaceVariant
+    val accent = MaterialTheme.colorScheme.primary
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
 
     OutlinedCard(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -66,10 +70,6 @@ internal fun ChestPlacementGuide(
                     val w = size.width
                     val h = size.height
                     val cx = w * 0.50f
-                    val outline = MaterialTheme.colorScheme.onSurface
-                    val subtle = MaterialTheme.colorScheme.onSurfaceVariant
-                    val accent = MaterialTheme.colorScheme.primary
-
                     val torso = Path().apply {
                         moveTo(cx, h * 0.06f)
                         cubicTo(w * 0.38f, h * 0.08f, w * 0.27f, h * 0.14f, w * 0.18f, h * 0.24f)
@@ -104,16 +104,16 @@ internal fun ChestPlacementGuide(
                 }
                 Text("PHONE • SPEAKER + MIC → CHEST", modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Surface(shape = RoundedCornerShape(12.dp), color = surfaceVariant) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("0" + (zone.index + 1), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     Column {
                         Text(zone.name, fontWeight = FontWeight.SemiBold)
-                        Text(zone.description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        Text(zone.description, color = subtle, fontSize = 12.sp)
                     }
                 }
             }
-            Text(tested.size.toString() + "/" + chestZones.size + " positions tested", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+            Text(tested.size.toString() + "/" + chestZones.size + " positions tested", color = subtle, fontSize = 11.sp)
         }
     }
 }
