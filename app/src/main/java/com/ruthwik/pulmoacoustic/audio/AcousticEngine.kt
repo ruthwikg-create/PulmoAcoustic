@@ -6,23 +6,18 @@ import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.sin
 
-data class AudioCapture(val samples: ShortArray, val sampleRateHz: Int)
+data class AudioCapture(
+    val samples: ShortArray,
+    val sampleRateHz: Int,
+    val aborted: Boolean,
+)
 
 class AcousticEngine {
     fun supportedSampleRate(): Int {
         val candidateRates = intArrayOf(48_000, 44_100, 32_000)
         return candidateRates.firstOrNull { rate ->
-            val inSize = AudioRecord.getMinBufferSize(
-                rate,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            val outSize = AudioTrack.getMinBufferSize(
-                rate,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            inSize > 0 && outSize > 0
+            AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT) > 0 &&
+                AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT) > 0
         } ?: 44_100
     }
 
@@ -30,15 +25,13 @@ class AcousticEngine {
         durationSec: Int,
         carrierHz: Double,
         outputGain: Float,
-        onProgress: (Float) -> Unit = {}
+        shouldAbort: () -> Boolean = { false },
+        onProgress: (Float) -> Unit = {},
+        onSamples: (ShortArray, Int) -> Unit = { _, _ -> },
     ): AudioCapture = withContext(Dispatchers.IO) {
         val rate = supportedSampleRate()
-        val inBuffer = (AudioRecord.getMinBufferSize(
-            rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
-        ) * 2).coerceAtLeast(8192)
-        val outBuffer = (AudioTrack.getMinBufferSize(
-            rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT
-        ) * 2).coerceAtLeast(8192)
+        val inBuffer = (AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT) * 2).coerceAtLeast(8192)
+        val outBuffer = (AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT) * 2).coerceAtLeast(8192)
 
         val source = if (android.os.Build.VERSION.SDK_INT >= 24) {
             runCatching { MediaRecorder.AudioSource.UNPROCESSED }.getOrDefault(MediaRecorder.AudioSource.MIC)
@@ -47,11 +40,7 @@ class AcousticEngine {
         }
 
         val recorder = AudioRecord(
-            source,
-            rate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            inBuffer
+            source, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, inBuffer
         )
         check(recorder.state == AudioRecord.STATE_INITIALIZED) { "Microphone could not be initialized" }
 
@@ -69,33 +58,30 @@ class AcousticEngine {
             AudioTrack.MODE_STREAM,
             AudioManager.AUDIO_SESSION_ID_GENERATE
         )
-
         check(track.state == AudioTrack.STATE_INITIALIZED) { "Speaker audio could not be initialized" }
 
         val safeGain = outputGain.coerceIn(0.015f, 0.08f)
         val pcmChunk = ShortArray(2048)
         var phase = 0.0
         val phaseStep = 2.0 * PI * carrierHz / rate
-        for (i in pcmChunk.indices) {
-            pcmChunk[i] = (sin(phase) * 0.80 * Short.MAX_VALUE).toInt().toShort()
-            phase += phaseStep
-            if (phase > 2.0 * PI) phase -= 2.0 * PI
-        }
-
         val expected = durationSec * rate
         val captured = ShortArray(expected)
+        val scratch = ShortArray(4096)
         var writeIndex = 0
+        var aborted = false
 
         try {
             track.setVolume(safeGain)
             track.play()
             recorder.startRecording()
-
             val started = System.nanoTime()
-            val scratch = ShortArray(4096)
 
             while (writeIndex < expected) {
-                // Rebuild oscillator chunk continuously to prevent phase discontinuity.
+                if (shouldAbort()) {
+                    aborted = true
+                    break
+                }
+
                 var p = phase
                 for (i in pcmChunk.indices) {
                     pcmChunk[i] = (sin(p) * 0.80 * Short.MAX_VALUE).toInt().toShort()
@@ -103,14 +89,18 @@ class AcousticEngine {
                     if (p > 2.0 * PI) p -= 2.0 * PI
                 }
                 phase = p
+
                 val written = track.write(pcmChunk, 0, pcmChunk.size, AudioTrack.WRITE_BLOCKING)
-                check(written >= 0) { "Speaker write failed: " + written }
+                check(written >= 0) { "Speaker write failed: $written" }
 
                 val n = recorder.read(scratch, 0, scratch.size, AudioRecord.READ_BLOCKING)
-                check(n >= 0) { "Microphone read failed: " + n }
+                check(n >= 0) { "Microphone read failed: $n" }
+
                 if (n > 0) {
                     val copy = minOf(n, expected - writeIndex)
                     scratch.copyInto(captured, writeIndex, 0, copy)
+                    val emitted = scratch.copyOfRange(0, copy)
+                    onSamples(emitted, rate)
                     writeIndex += copy
                 }
 
@@ -124,6 +114,6 @@ class AcousticEngine {
             runCatching { track.release() }
         }
 
-        AudioCapture(captured, rate)
+        AudioCapture(captured.copyOf(writeIndex), rate, aborted)
     }
 }
