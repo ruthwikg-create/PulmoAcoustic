@@ -755,51 +755,151 @@ private fun MetricCell(label: String, value: String) {
 
 @Composable
 private fun MeasureScreen(
-    progress: Float,
     busy: Boolean,
+    stage: String,
     status: String,
+    progress: Float,
     bestPosition: String,
     bestOrientation: String,
     durationSec: Int,
+    snapshot: LiveSnapshot,
     result: RespiratoryResult?,
     onMeasure: () -> Unit,
+    onStop: () -> Unit,
     onScan: () -> Unit
 ) {
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         item {
             Spacer(Modifier.height(12.dp))
             Text("Measurement", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            Text("One clean session is better than a forced number.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stage, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
-            Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(150.dp)) {
-                        CircularProgressIndicator(progress = { if (busy) progress else 1f }, modifier = Modifier.fillMaxSize(), strokeWidth = 8.dp)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (busy) (progress * durationSec).roundToInt().toString() + " s" else "Ready", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-                            Text(if (busy) "acquiring" else durationSec.toString() + " s", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedCard {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text(status, fontWeight = FontWeight.Medium)
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                    Text(
+                        "Acoustic carrier: active • motion monitoring: active • live analysis: active",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                    if (busy) {
+                        OutlinedButton(
+                            onClick = onStop,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Filled.Stop, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Stop measurement")
                         }
-                    }
-                    Text(status, textAlign = TextAlign.Center)
-                    Button(onClick = onMeasure, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (busy) "Measuring..." else "Start measurement")
-                    }
-                    OutlinedButton(onClick = onScan, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Filled.Tune, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Review chest position")
+                    } else {
+                        Button(
+                            onClick = onMeasure,
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Start measurement")
+                        }
                     }
                 }
             }
         }
-        item { Text("Current setup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
+        item { LiveWaveformCard(snapshot) }
+        item { LiveMetricsCard(snapshot) }
         item { SetupSummaryCard(bestPosition, bestOrientation, durationSec) }
+        item {
+            OutlinedButton(onClick = onScan, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.LocationOn, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Review chest position")
+            }
+        }
         result?.let {
-            item { Text("Latest session", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
-            item { ResultSummaryCard(it) }
+            item { ResultCard(it) }
+        }
+        item {
+            OutlinedCard {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("What is happening", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "1. Phone speaker sends the carrier. 2. Microphone captures the reflected signal. 3. Motion sensors watch for movement. 4. I/Q processing extracts the acoustic phase signal. 5. Three RR estimators are compared. 6. The quality gate decides whether a number is trustworthy.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveWaveformCard(snapshot: LiveSnapshot) {
+    OutlinedCard {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Live respiratory signal", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (snapshot.trace.isEmpty()) "Waiting" else "Live",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
+            Canvas(Modifier.fillMaxWidth().height(190.dp)) {
+                val values = snapshot.trace
+                val centerY = size.height / 2f
+                drawLine(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                    start = Offset(0f, centerY),
+                    end = Offset(size.width, centerY),
+                    strokeWidth = 1f
+                )
+                if (values.size >= 2) {
+                    val path = Path()
+                    values.forEachIndexed { index, value ->
+                        val x = size.width * index / (values.size - 1).coerceAtLeast(1)
+                        val y = centerY - value.coerceIn(-1f, 1f) * size.height * 0.40f
+                        if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                    }
+                    drawPath(
+                        path = path,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+                    )
+                }
+            }
+            Text(
+                "Phase-derived acoustic trace; it is not a clinical airflow waveform.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 11.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun LiveMetricsCard(snapshot: LiveSnapshot) {
+    OutlinedCard {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Live analysis", fontWeight = FontWeight.SemiBold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                MetricCell("RR", snapshot.rrBpm?.let { String.format(Locale.US, "%.1f", it) } ?: "—")
+                MetricCell("Confidence", snapshot.confidence.toString() + "%")
+                MetricCell("Motion", String.format(Locale.US, "%.2f", snapshot.motionScore))
+            }
+            Text(
+                "SNR " + String.format(Locale.US, "%.1f dB", snapshot.snrDb) +
+                    " • periodicity " + String.format(Locale.US, "%.2f", snapshot.periodicity),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp
+            )
+            Text(snapshot.stage, fontWeight = FontWeight.Medium)
         }
     }
 }
