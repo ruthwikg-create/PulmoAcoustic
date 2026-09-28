@@ -1,0 +1,18 @@
+{
+  "generated": "2026-09-28",
+  "note": "Curated respiratory/cardiorespiratory research catalog. Verify current access and license terms at the official source before redistribution.",
+  "datasets": [
+    {"id":"bidmc","name":"BIDMC PPG and Respiration Dataset","source":"PhysioNet","url":"https://physionet.org/content/bidmc/1.0.0/","use":"Respiratory rate, impedance respiration and manual breath annotations"},
+    {"id":"apnea_ecg","name":"Apnea-ECG Database","source":"PhysioNet","url":"https://physionet.org/content/apnea-ecg/1.0.0/","use":"Sleep-apnea and respiration research"},
+    {"id":"sleep_edfx","name":"Sleep-EDF Expanded","source":"PhysioNet","url":"https://physionet.org/content/sleep-edfx/1.0.0/","use":"Whole-night PSG and respiration"},
+    {"id":"shhs_psg","name":"Sleep Heart Health Study PSG","source":"PhysioNet/NSRR","url":"https://physionet.org/content/shhpsgdb/1.0.0/","use":"Overnight airflow, respiratory effort and sleep-event reference"},
+    {"id":"cebsdb","name":"CEBSDB","source":"PhysioNet","url":"https://physionet.org/content/cebsdb/1.0.0/","use":"Breathing, ECG and seismocardiographic reference signals"},
+    {"id":"resp_hr_aeration","name":"Respiratory and Heart Rate Monitoring Dataset from Aeration Study","source":"PhysioNet","url":"https://physionet.org/content/respiratory-heartrate-dataset/1.0.0/","use":"Respiratory pressure/flow and thoracic reference signals"},
+    {"id":"resp_peep","name":"Respiratory Dataset from PEEP Study with Expiratory Occlusion","source":"PhysioNet","url":"https://physionet.org/content/respiratory-dataset/1.0.0/","use":"Pressure, flow and thoraco-abdominal respiratory mechanics"},
+    {"id":"sim_obstructive","name":"Simulated Obstructive Disease Respiratory Pressure and Flow","source":"PhysioNet","url":"https://physionet.org/content/simulated-obstructive-disease/1.0.0/","use":"Controlled obstructive/COPD-style modelling"},
+    {"id":"circum_cpap","name":"Pressure, Flow and Dynamic Thoraco-Abdominal Circumferences under CPAP","source":"PhysioNet","url":"https://physionet.org/content/pressure-flow-circum-cpap/1.0.0/","use":"Chest/abdomen motion with pressure and flow"},
+    {"id":"cpap_canterbury","name":"CPAP Pressure and Flow Data from University of Canterbury","source":"PhysioNet","url":"https://physionet.org/content/cpap-data-canterbury/1.0.1/","use":"Controlled breathing-rate pressure/flow reference"},
+    {"id":"resp_oximetry_apnoea_2026","name":"Respiratory and Pulse Oximetry Waveforms During Simulated Apnoea Events","source":"PhysioNet","url":"https://physionet.org/content/respiratory-oximetry-apnoea/1.0.0/","use":"Recent simulated apnea reference data"},
+    {"id":"preterm_cardiorespiratory","name":"Preterm Infant Cardio-Respiratory Signals Database","source":"PhysioNet","url":"https://physionet.org/content/?topic=respiratory","use":"Later edge-case respiratory signal testing"}
+  ]
+}
