@@ -34,7 +34,12 @@ private val datasets = listOf(
     DatasetInfo("CEBSDB", "ECG, respiration and seismocardiography", "https://physionet.org/content/cebsdb/1.0.0/"),
     DatasetInfo("Aeration Respiratory + HR", "Reference respiratory pressure/flow measurements", "https://physionet.org/content/respiratory-heartrate-dataset/1.0.0/"),
     DatasetInfo("Simulated Obstructive Disease", "Obstructive/COPD-style respiratory modelling", "https://physionet.org/content/simulated-obstructive-disease/1.0.0/"),
-    DatasetInfo("Respiratory Oximetry Apnoea 2026", "Recent simulated apnea reference data", "https://physionet.org/content/respiratory-oximetry-apnoea/1.0.0/")
+    DatasetInfo("Respiratory Oximetry Apnoea 2026", "Recent simulated apnea reference data", "https://physionet.org/content/respiratory-oximetry-apnoea/1.0.0/"),
+    DatasetInfo("Sleep Heart Health Study PSG", "Large overnight PSG/respiratory reference set", "https://physionet.org/content/shhpsgdb/1.0.0/"),
+    DatasetInfo("PEEP Respiratory Dataset", "80 adults; pressure, flow and thoraco-abdominal reference signals", "https://physionet.org/content/respiratory-dataset/1.0.0/"),
+    DatasetInfo("Thoraco-Abdominal Circumference + CPAP", "Chest/abdominal motion with pressure and flow", "https://physionet.org/content/pressure-flow-circum-cpap/1.0.0/"),
+    DatasetInfo("CPAP Canterbury", "Controlled breathing pressure/flow reference data", "https://physionet.org/content/cpap-data-canterbury/1.0.1/"),
+    DatasetInfo("Preterm Cardio-Respiratory Signals", "Respiratory reference signals for later edge-case research", "https://physionet.org/content/?topic=respiratory")
 )
 
 class MainActivity : ComponentActivity() {
@@ -44,6 +49,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PulmoApp() {
     val context = LocalContext.current
@@ -52,6 +58,8 @@ fun PulmoApp() {
     val processor = remember { RespiratorySignalProcessor() }
     val sensors = remember { DeviceSensors(context) }
     val store = remember { MeasurementStore(context) }
+    val prefs = remember { context.getSharedPreferences("pulmo_settings", 0) }
+    val deviceKey = remember { android.os.Build.MANUFACTURER + ":" + android.os.Build.MODEL }
 
     var tab by remember { mutableStateOf(0) }
     var hasMic by remember {
@@ -59,10 +67,14 @@ fun PulmoApp() {
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         )
     }
-    var carrier by remember { mutableStateOf(19_000.0) }
-    var gain by remember { mutableStateOf(0.04f) }
-    var calibrated by remember { mutableStateOf(false) }
+    var carrier by remember { mutableStateOf(prefs.getFloat("carrier_hz", 19_000f).toDouble()) }
+    var gain by remember { mutableStateOf(prefs.getFloat("gain", 0.04f)) }
+    var calibrated by remember { mutableStateOf(prefs.getString("calibrated_device", "") == deviceKey) }
+    var autoOptimize by remember { mutableStateOf(prefs.getBoolean("auto_optimize", true)) }
+    var researchCapture by remember { mutableStateOf(prefs.getBoolean("research_capture", false)) }
+    var durationSec by remember { mutableStateOf(prefs.getInt("duration_sec", 45).coerceIn(30, 60)) }
     var bestPosition by remember { mutableStateOf("Not scanned") }
+    var bestOrientation by remember { mutableStateOf("Not scanned") }
     var status by remember { mutableStateOf("Ready") }
     var progress by remember { mutableStateOf(0f) }
     var busy by remember { mutableStateOf(false) }
@@ -94,99 +106,133 @@ fun PulmoApp() {
     suspend fun calibrate() {
         if (!requestMic()) return
         busy = true
-        status = "Testing safe carrier frequencies..."
-        var best = carrier
-        var bestStrength = -1.0
-        val candidates = listOf(18_000.0, 19_000.0, 20_000.0)
-        for (index in candidates.indices) {
-            val f = candidates[index]
-            val cap = engine.capture(2, f, gain) { p ->
-                progress = (index + p) / candidates.size.toFloat()
+        try {
+            status = "Testing safe carrier frequencies..."
+            var best = carrier
+            var bestStrength = -1.0
+            val candidates = listOf(18_000.0, 19_000.0, 20_000.0)
+            for (index in candidates.indices) {
+                val f = candidates[index]
+                val cap = engine.capture(2, f, gain) { p ->
+                    progress = (index + p) / candidates.size.toFloat()
+                }
+                val strength = processor.carrierStrength(cap.samples, cap.sampleRateHz, f)
+                if (strength > bestStrength) {
+                    bestStrength = strength
+                    best = f
+                }
             }
-            val strength = processor.carrierStrength(cap.samples, cap.sampleRateHz, f)
-            if (strength > bestStrength) {
-                bestStrength = strength
-                best = f
-            }
+            carrier = best
+            calibrated = true
+            prefs.edit().putFloat("carrier_hz", best.toFloat()).putFloat("gain", gain).putString("calibrated_device", deviceKey).apply()
+            progress = 1f
+            status = "Calibration complete. Selected carrier " + best.roundToInt() + " Hz"
+        } catch (t: Throwable) {
+            status = "Calibration failed on this phone: " + (t.message ?: "audio error")
+        } finally {
+            busy = false
         }
-        carrier = best
-        calibrated = true
-        progress = 1f
-        busy = false
-        status = "Calibration complete. Selected carrier " + best.roundToInt() + " Hz"
     }
-
     suspend fun scan(label: String) {
         if (!requestMic()) return
         busy = true
-        sensors.beginMeasurementSession()
-        status = "Hold still at " + label
-        progress = 0f
-        val cap = engine.capture(12, carrier, gain) { progress = it }
-        val motion = sensors.getMeasurementMotionScore()
-        val a = processor.analyze(cap.samples, cap.sampleRateHz, carrier, motion, sensors.hasMajorMovement())
-        val score = (
-            ((a.snrDb + 4.0) / 24.0).coerceIn(0.0, 1.0) * 45.0 +
-            a.periodicity * 35.0 +
-            a.confidence * 0.20
-        )
-        val point = ScanPoint(
-            label = label,
-            qualityScore = score,
-            snrDb = a.snrDb,
-            periodicity = a.periodicity,
-            motionScore = motion,
-            pitchDeg = sensors.pitchDegrees(),
-            rollDeg = sensors.rollDegrees(),
-            yawDeg = sensors.yawDegrees(),
-            tested = true
-        )
-        scanResults.removeAll { it.label == label }
-        scanResults.add(point)
-        bestPosition = scanResults.maxByOrNull { it.qualityScore }?.label ?: label
-        busy = false
-        status = "Best position: " + bestPosition
+        try {
+            sensors.beginMeasurementSession()
+            status = "Hold still at " + label
+            progress = 0f
+            val cap = engine.capture(12, carrier, gain) { progress = it }
+            val motion = sensors.getMeasurementMotionScore()
+            val a = processor.analyze(cap.samples, cap.sampleRateHz, carrier, motion, sensors.hasMajorMovement())
+            val score = (
+                ((a.snrDb + 4.0) / 24.0).coerceIn(0.0, 1.0) * 45.0 +
+                a.periodicity * 35.0 +
+                a.confidence * 0.20
+            )
+            val point = ScanPoint(
+                label = label,
+                qualityScore = score,
+                snrDb = a.snrDb,
+                periodicity = a.periodicity,
+                motionScore = motion,
+                pitchDeg = sensors.pitchDegrees(),
+                rollDeg = sensors.rollDegrees(),
+                yawDeg = sensors.yawDegrees(),
+                tested = true
+            )
+            scanResults.removeAll { it.label == label }
+            scanResults.add(point)
+            val best = scanResults.maxByOrNull { it.qualityScore }
+            bestPosition = best?.label ?: label
+            bestOrientation = best?.let {
+                "Pitch " + it.pitchDeg.roundToInt() + "°, Roll " + it.rollDeg.roundToInt() + "°, Yaw " + it.yawDeg.roundToInt() + "°"
+            } ?: "Not scanned"
+            status = "Best position: " + bestPosition
+        } catch (t: Throwable) {
+            status = "Scan failed: " + (t.message ?: "audio error")
+        } finally {
+            busy = false
+        }
     }
-
     suspend fun measure() {
         if (!requestMic()) return
-        busy = true
-        result = null
-        status = "Measuring for 30 seconds. Stay still and silent."
-        progress = 0f
-        sensors.beginMeasurementSession()
-        val cap = engine.capture(30, carrier, gain) { progress = it }
-        val motion = sensors.getMeasurementMotionScore()
-        val a = processor.analyze(cap.samples, cap.sampleRateHz, carrier, motion, sensors.hasMajorMovement())
-        val quality = SignalQuality(
-            snrDb = a.snrDb,
-            periodicity = a.periodicity,
-            motionScore = motion,
-            carrierStability = a.carrierStability,
-            confidence = a.confidence,
-            valid = a.valid,
-            majorMovementDetected = sensors.hasMajorMovement(),
-            estimatorAgreementBpm = a.estimatorAgreementBpm
-        )
-        val r = RespiratoryResult(
-            respiratoryRateBpm = a.rrBpm,
-            signalQuality = quality,
-            carrierHz = carrier,
-            durationSec = 30.0,
-            timestampEpochMs = System.currentTimeMillis(),
-            message = if (a.valid) "Accepted" else "Rejected: signal not trustworthy"
-        )
-        result = r
-        if (a.valid) {
-            store.save(r)
-            history.add(0, r)
-            while (history.size > 30) history.removeLast()
+        if (autoOptimize && !calibrated) {
+            calibrate()
+            if (!calibrated) return
         }
-        progress = 1f
-        busy = false
-        status = if (a.valid) "Measurement accepted" else "No trustworthy result; repeat"
+        if (autoOptimize && scanResults.isEmpty()) {
+            status = "Run the guided chest scan first for best placement."
+            tab = 1
+            return
+        }
+        busy = true
+        try {
+            result = null
+            status = "Measuring for " + durationSec + " seconds. Stay still and silent."
+            progress = 0f
+            sensors.beginMeasurementSession()
+            val cap = engine.capture(durationSec, carrier, gain) { progress = it }
+            val motion = sensors.getMeasurementMotionScore()
+            val a = processor.analyze(cap.samples, cap.sampleRateHz, carrier, motion, sensors.hasMajorMovement())
+            val quality = SignalQuality(
+                snrDb = a.snrDb,
+                periodicity = a.periodicity,
+                motionScore = motion,
+                carrierStability = a.carrierStability,
+                confidence = a.confidence,
+                valid = a.valid,
+                majorMovementDetected = sensors.hasMajorMovement(),
+                estimatorAgreementBpm = a.estimatorAgreementBpm
+            )
+            val r = RespiratoryResult(
+                respiratoryRateBpm = a.rrBpm,
+                signalQuality = quality,
+                carrierHz = carrier,
+                durationSec = durationSec.toDouble(),
+                timestampEpochMs = System.currentTimeMillis(),
+                message = if (a.valid) "Accepted" else "Rejected: signal not trustworthy"
+            )
+            if (researchCapture) {
+                val dir = java.io.File(context.filesDir, "research-captures")
+                com.ruthwik.pulmoacoustic.storage.WavWriter.writeMonoPcm16(
+                    java.io.File(dir, "capture_" + r.timestampEpochMs + ".wav"),
+                    cap.samples,
+                    cap.sampleRateHz
+                )
+            }
+            result = r
+            if (a.valid) {
+                store.save(r)
+                history.add(0, r)
+                while (history.size > 30) history.removeLast()
+            }
+            progress = 1f
+            status = if (a.valid) "Measurement accepted" else "No trustworthy result; repeat"
+        } catch (t: Throwable) {
+            status = "Measurement failed: " + (t.message ?: "audio error")
+        } finally {
+            busy = false
+        }
     }
-
     Scaffold(topBar = { TopAppBar(title = { Text("PulmoAcoustic") }) }) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             TabRow(selectedTabIndex = tab) {
@@ -203,12 +249,12 @@ fun PulmoApp() {
                     onPoint = { selectedPoint = it },
                     onTest = { scope.launch { scan(scanPoints[selectedPoint]) } }
                 )
-                2 -> MeasurePage(progress, busy, status, bestPosition, result) {
+                2 -> MeasurePage(progress, busy, status, bestPosition, bestOrientation, durationSec, result) {
                     scope.launch { measure() }
                 }
                 3 -> HistoryPage(history)
                 4 -> DataPage(context)
-                else -> SettingsPage(carrier, gain, calibrated, { carrier = it }, { gain = it })
+                else -> SettingsPage(autoOptimize, researchCapture, durationSec, carrier, gain, calibrated,\n                    onAuto = { autoOptimize = it; prefs.edit().putBoolean("auto_optimize", it).apply() },\n                    onResearchCapture = { researchCapture = it; prefs.edit().putBoolean("research_capture", it).apply() },\n                    onDuration = { durationSec = it; prefs.edit().putInt("duration_sec", it).apply() },\n                    onCarrier = { carrier = it; prefs.edit().putFloat("carrier_hz", it.toFloat()).apply() },\n                    onGain = { gain = it; prefs.edit().putFloat("gain", it).apply() })
             }
         }
     }
@@ -278,12 +324,16 @@ private fun MeasurePage(
     busy: Boolean,
     status: String,
     bestPosition: String,
+    bestOrientation: String,
+    durationSec: Int,
     result: RespiratoryResult?,
     onMeasure: () -> Unit
 ) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Respiratory Measurement", style = MaterialTheme.typography.headlineSmall)
         Text("Best location: " + bestPosition)
+        Text("Saved phone orientation: " + bestOrientation)
+        Text("Duration: " + durationSec + " s • Target distance: about 40–60 cm")
         LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
         Button(onClick = onMeasure, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(if (busy) "Measuring..." else "Start 30-second measurement")
@@ -341,10 +391,43 @@ private fun DataPage(context: android.content.Context) {
 }
 
 @Composable
-private fun SettingsPage(carrier: Double, gain: Float, calibrated: Boolean, onCarrier: (Double) -> Unit, onGain: (Float) -> Unit) {
+private fun SettingsPage(
+    autoOptimize: Boolean,
+    researchCapture: Boolean,
+    durationSec: Int,
+    carrier: Double,
+    gain: Float,
+    calibrated: Boolean,
+    onAuto: (Boolean) -> Unit,
+    onResearchCapture: (Boolean) -> Unit,
+    onDuration: (Int) -> Unit,
+    onCarrier: (Double) -> Unit,
+    onGain: (Float) -> Unit,
+) {
     LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { Text("Advanced Research Settings", style = MaterialTheme.typography.headlineSmall) }
-        item { Text("Carrier " + carrier.roundToInt() + " Hz") }
+        item { Text("Settings", style = MaterialTheme.typography.headlineSmall) }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Automatic optimization")
+                Switch(checked = autoOptimize, onCheckedChange = onAuto)
+            }
+        }
+        item { Text("Measurement duration: " + durationSec + " seconds") }
+        item {
+            Slider(
+                value = durationSec.toFloat(),
+                onValueChange = { onDuration(it.roundToInt().coerceIn(30, 60)) },
+                valueRange = 30f..60f,
+                steps = 5
+            )
+        }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Research raw WAV capture")
+                Switch(checked = researchCapture, onCheckedChange = onResearchCapture)
+            }
+        }
+        item { Text("Carrier: " + carrier.roundToInt() + " Hz") }
         item {
             Slider(
                 value = carrier.toFloat(),
@@ -353,11 +436,11 @@ private fun SettingsPage(carrier: Double, gain: Float, calibrated: Boolean, onCa
                 steps = 19
             )
         }
-        item { Text("Output gain " + "%.3f".format(gain)) }
+        item { Text("Output gain: " + "%.3f".format(gain) + " (bounded app range)") }
         item {
             Slider(value = gain, onValueChange = onGain, valueRange = 0.015f..0.08f, steps = 12)
         }
-        item { Text("Calibration status: " + if (calibrated) "complete" else "not completed") }
-        item { Text("Keep the default limits unless performing controlled research. Do not increase output beyond the app's safe range.") }
+        item { Text("Calibration status: " + if (calibrated) "complete for this phone" else "not completed") }
+        item { Text("Keep automatic optimization enabled for normal use. Manual carrier/gain controls are for supervised research only.") }
     }
 }
