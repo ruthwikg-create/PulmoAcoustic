@@ -37,6 +37,7 @@ class DeviceSensors(context: Context) : SensorEventListener {
     }
 
     fun beginMeasurementSession() {
+        lastGyroTimestampNs = 0L
         instantMotion = 0.0
         sessionPeak = 0.0
         sessionEnergy = 0.0
@@ -69,7 +70,7 @@ class DeviceSensors(context: Context) : SensorEventListener {
                 instantMotion = 0.82 * instantMotion + 0.18 * normalized
                 sessionPeak = maxOf(sessionPeak, normalized)
                 sessionEnergy = 0.96 * sessionEnergy + 0.04 * normalized
-                if (normalized >= 0.70) majorMovement = true
+                if (normalized >= 0.45) majorMovement = true
             }
             Sensor.TYPE_GYROSCOPE -> {
                 val gx = event.values[0].toDouble()
@@ -81,7 +82,7 @@ class DeviceSensors(context: Context) : SensorEventListener {
                 instantMotion = 0.82 * instantMotion + 0.18 * normalized
                 sessionPeak = maxOf(sessionPeak, normalized)
                 sessionEnergy = 0.96 * sessionEnergy + 0.04 * normalized
-                if (normalized >= 0.70) majorMovement = true
+                if (normalized >= 0.45) majorMovement = true
 
                 if (lastGyroTimestampNs != 0L) {
                     val dt = ((event.timestamp - lastGyroTimestampNs) / 1e9).coerceIn(0.0, 0.1)
