@@ -330,26 +330,92 @@ private fun PulmoApp(
     }
 
     suspend fun measure() {
-        if (!requestMic()) return
-        if (autoOptimize && !calibrated) {
+        if (!requestMic() || busy) return
+
+        if (!calibrated) {
             screen = Screen.SETTINGS
-            calibrate()
-            if (!calibrated) return
-        }
-        if (autoOptimize && scanResults.isEmpty()) {
-            screen = Screen.SCAN
-            status = "Complete the guided chest scan first."
+            sessionStage = "Ready"
+            status = "Calibration required before measurement"
             return
         }
+        if (!scanComplete) {
+            screen = Screen.SCAN
+            sessionStage = "Ready"
+            status = "Complete the chest-position scan before measurement"
+            return
+        }
+
         busy = true
+        stopRequested.set(false)
+        sessionStage = "Measuring"
+        status = "Measuring • stay still and breathe normally"
+        progress = 0f
+        result = null
+        liveTracker.reset(engine.supportedSampleRate(), carrier)
+
         try {
-            result = null
-            status = "Measuring • stay still and breathe normally"
-            progress = 0f
             sensors.beginMeasurementSession()
-            val cap = engine.capture(durationSec, carrier, gain) { progress = it }
+
+            val cap = engine.capture(
+                durationSec,
+                carrier,
+                gain,
+                shouldAbort = { stopRequested.get() || sensors.hasMajorMovement() },
+                onProgress = { progress = it },
+                onSamples = { samples, rate ->
+                    liveTracker.ingest(samples, rate)
+                    liveTracker.updateAnalysis(sensors.getLiveMotionScore(), sensors.hasMajorMovement())
+                }
+            )
+
+            val movementDetected = sensors.hasMajorMovement()
+            val userStopped = stopRequested.get()
+
+            if (cap.aborted) {
+                sessionStage = if (movementDetected) "Movement detected" else "Stopped"
+                status = if (movementDetected) {
+                    "Stopped automatically • rapid movement detected"
+                } else {
+                    "Stopped by you"
+                }
+
+                val stopped = RespiratoryResult(
+                    respiratoryRateBpm = null,
+                    signalQuality = SignalQuality(
+                        snrDb = liveSnapshot.snrDb,
+                        periodicity = liveSnapshot.periodicity,
+                        motionScore = sensors.getMeasurementMotionScore(),
+                        carrierStability = 0.0,
+                        confidence = 0,
+                        valid = false,
+                        majorMovementDetected = movementDetected,
+                        estimatorAgreementBpm = 99.0
+                    ),
+                    carrierHz = carrier,
+                    durationSec = cap.samples.size.toDouble() / cap.sampleRateHz.toDouble(),
+                    timestampEpochMs = System.currentTimeMillis(),
+                    message = if (userStopped) "Stopped by user" else "Stopped because rapid movement was detected"
+                )
+
+                result = stopped
+                store.save(stopped)
+                history.add(0, stopped)
+                while (history.size > 100) history.removeLast()
+                return
+            }
+
+            sessionStage = "Analyzing"
+            status = "Analyzing acoustic phase + 3 respiratory estimators"
+
             val motion = sensors.getMeasurementMotionScore()
-            val a = processor.analyze(cap.samples, cap.sampleRateHz, carrier, motion, sensors.hasMajorMovement())
+            val a = processor.analyze(
+                cap.samples,
+                cap.sampleRateHz,
+                carrier,
+                motion,
+                movementDetected
+            )
+
             val quality = SignalQuality(
                 snrDb = a.snrDb,
                 periodicity = a.periodicity,
@@ -357,33 +423,42 @@ private fun PulmoApp(
                 carrierStability = a.carrierStability,
                 confidence = a.confidence,
                 valid = a.valid,
-                majorMovementDetected = sensors.hasMajorMovement(),
+                majorMovementDetected = movementDetected,
                 estimatorAgreementBpm = a.estimatorAgreementBpm
             )
-            val r = RespiratoryResult(
+
+            val finalResult = RespiratoryResult(
                 respiratoryRateBpm = a.rrBpm,
                 signalQuality = quality,
                 carrierHz = carrier,
                 durationSec = durationSec.toDouble(),
                 timestampEpochMs = System.currentTimeMillis(),
-                message = if (a.valid) "Accepted" else "Rejected: signal not trustworthy"
+                message = if (a.valid) "Accepted by quality gate" else "Rejected by quality gate • repeat measurement"
             )
+
             if (researchCapture) {
                 val dir = java.io.File(context.filesDir, "research-captures")
-                com.ruthwik.pulmoacoustic.storage.WavWriter.writeMonoPcm16(java.io.File(dir, "capture_" + r.timestampEpochMs + ".wav"), cap.samples, cap.sampleRateHz)
+                com.ruthwik.pulmoacoustic.storage.WavWriter.writeMonoPcm16(
+                    java.io.File(dir, "capture_" + finalResult.timestampEpochMs + ".wav"),
+                    cap.samples,
+                    cap.sampleRateHz
+                )
             }
-            result = r
-            if (a.valid) {
-                store.save(r)
-                history.add(0, r)
-                while (history.size > 30) history.removeLast()
-            }
+
+            result = finalResult
+            store.save(finalResult)
+            history.add(0, finalResult)
+            while (history.size > 100) history.removeLast()
+
             progress = 1f
-            status = if (a.valid) "Measurement accepted" else "No trustworthy result • repeat"
+            sessionStage = if (a.valid) "Measurement accepted" else "Measurement rejected"
+            status = finalResult.message
         } catch (t: Throwable) {
+            sessionStage = "Measurement rejected"
             status = "Measurement failed • " + (t.message ?: "audio error")
         } finally {
             busy = false
+            stopRequested.set(false)
         }
     }
 
