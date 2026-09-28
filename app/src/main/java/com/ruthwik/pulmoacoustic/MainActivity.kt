@@ -257,13 +257,32 @@ private fun PulmoApp(
     }
 
     suspend fun scan(label: String) {
-        if (!requestMic()) return
+        if (!requestMic() || busy) return
         busy = true
+        stopRequested.set(false)
+        sessionStage = "Optimizing chest position"
+        status = "Testing " + label + " • hold the phone steady"
+        progress = 0f
+        liveTracker.reset(engine.supportedSampleRate(), carrier)
         try {
             sensors.beginMeasurementSession()
-            status = "Testing " + label + " • stay still"
-            progress = 0f
-            val cap = engine.capture(12, carrier, gain) { progress = it }
+            val cap = engine.capture(
+                12,
+                carrier,
+                gain,
+                shouldAbort = { stopRequested.get() || sensors.hasMajorMovement() },
+                onProgress = { progress = it },
+                onSamples = { samples, rate ->
+                    liveTracker.ingest(samples, rate)
+                    liveTracker.updateAnalysis(sensors.getLiveMotionScore(), sensors.hasMajorMovement())
+                }
+            )
+            if (cap.aborted) {
+                sessionStage = if (sensors.hasMajorMovement()) "Movement detected" else "Stopped"
+                status = if (sensors.hasMajorMovement()) "Scan stopped automatically • movement detected" else "Scan stopped"
+                return
+            }
+
             val motion = sensors.getMeasurementMotionScore()
             val a = processor.analyze(cap.samples, cap.sampleRateHz, carrier, motion, sensors.hasMajorMovement())
             val score = ((a.snrDb + 4.0) / 24.0).coerceIn(0.0, 1.0) * 45.0 + a.periodicity * 35.0 + a.confidence * 0.20
@@ -280,16 +299,33 @@ private fun PulmoApp(
             )
             scanResults.removeAll { it.label == label }
             scanResults.add(point)
+
             val best = scanResults.maxByOrNull { it.qualityScore }
             bestPosition = best?.label ?: label
             bestOrientation = best?.let {
                 "Pitch " + it.pitchDeg.roundToInt() + "° • Roll " + it.rollDeg.roundToInt() + "° • Yaw " + it.yawDeg.roundToInt() + "°"
             } ?: "Not scanned"
-            status = "Best location • " + bestPosition
+
+            val completeNow = scanResults.size >= scanPoints.size
+            scanComplete = completeNow
+            prefs.edit()
+                .putBoolean("scan_complete", completeNow)
+                .putString("best_position", bestPosition)
+                .putString("best_orientation", bestOrientation)
+                .apply()
+
+            sessionStage = "Ready"
+            status = if (completeNow) {
+                "Chest optimization complete • best location: " + bestPosition
+            } else {
+                "Position recorded • continue the chest scan"
+            }
         } catch (t: Throwable) {
+            sessionStage = "Rejected"
             status = "Scan failed • " + (t.message ?: "audio error")
         } finally {
             busy = false
+            stopRequested.set(false)
         }
     }
 
