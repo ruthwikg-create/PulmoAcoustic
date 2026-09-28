@@ -1,0 +1,9 @@
+<resources>
+    <color name="pulmo_black">#000000</color>
+    <color name="pulmo_white">#FFFFFF</color>
+    <color name="pulmo_surface_light">#F7F7F7</color>
+    <color name="pulmo_surface_dark">#111111</color>
+    <color name="pulmo_text_secondary_light">#5F6368</color>
+    <color name="pulmo_text_secondary_dark">#B7B7B7</color>
+    <color name="ic_launcher_background">#000000</color>
+</resources>
