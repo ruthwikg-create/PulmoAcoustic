@@ -199,31 +199,60 @@ private fun PulmoApp(
     }
 
     suspend fun calibrate() {
-        if (!requestMic()) return
+        if (!requestMic() || busy) return
         busy = true
+        stopRequested.set(false)
+        sessionStage = "Calibrating"
+        status = "Testing safe carrier options"
+        progress = 0f
         try {
-            status = "Calibrating this phone..."
             var best = carrier
             var bestStrength = -1.0
             val candidates = listOf(18000.0, 19000.0, 20000.0)
             for (index in candidates.indices) {
+                if (stopRequested.get()) break
                 val f = candidates[index]
-                val cap = engine.capture(2, f, gain) { p -> progress = (index + p) / candidates.size.toFloat() }
+                val cap = engine.capture(
+                    2,
+                    f,
+                    gain,
+                    shouldAbort = { stopRequested.get() },
+                    onProgress = { p -> progress = (index + p) / candidates.size.toFloat() }
+                )
+                if (cap.aborted) break
                 val strength = processor.carrierStrength(cap.samples, cap.sampleRateHz, f)
                 if (strength > bestStrength) {
                     bestStrength = strength
                     best = f
                 }
             }
+            if (stopRequested.get()) {
+                sessionStage = "Stopped"
+                status = "Calibration stopped"
+                return
+            }
             carrier = best
             calibrated = true
-            prefs.edit().putFloat("carrier_hz", best.toFloat()).putFloat("gain", gain).putString("calibrated_device", deviceKey).apply()
+            scanComplete = false
+            bestPosition = "Not scanned"
+            bestOrientation = "Not scanned"
+            prefs.edit()
+                .putFloat("carrier_hz", best.toFloat())
+                .putFloat("gain", gain)
+                .putString("calibrated_device", deviceKey)
+                .putBoolean("scan_complete", false)
+                .remove("best_position")
+                .remove("best_orientation")
+                .apply()
+            sessionStage = "Ready"
             progress = 1f
-            status = "Calibration complete • " + best.roundToInt() + " Hz selected"
+            status = "Phone calibrated • " + best.roundToInt() + " Hz selected"
         } catch (t: Throwable) {
+            sessionStage = "Rejected"
             status = "Calibration failed • " + (t.message ?: "audio error")
         } finally {
             busy = false
+            stopRequested.set(false)
         }
     }
 
