@@ -1004,26 +1004,53 @@ private fun ScanScreen(
 
 @Composable
 private fun HistoryScreen(history: List<RespiratoryResult>) {
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         item {
             Spacer(Modifier.height(12.dp))
             Text("History", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            Text("Accepted local measurements only.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Accepted, rejected and stopped sessions are stored locally.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         if (history.isEmpty()) {
-            item { EmptyState(Icons.Filled.History, "No accepted measurements yet", "Complete calibration, chest scanning and one clean measurement to start building your baseline.") }
+            item {
+                Text(
+                    "No sessions recorded yet.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         } else {
             items(history) { r ->
-                Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(r.respiratoryRateBpm?.let { String.format(Locale.US, "%.1f breaths/min", it) } ?: "Rejected", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                            Text(java.util.Date(r.timestampEpochMs).toString(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(r.signalQuality.confidence.toString() + "%")
-                            Text("confidence", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                        }
+                OutlinedCard {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            r.respiratoryRateBpm?.let {
+                                String.format(Locale.US, "%.1f breaths/min", it)
+                            } ?: "No valid value",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            r.message,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp
+                        )
+                        Text(
+                            java.util.Date(r.timestampEpochMs).toString(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            "Duration " + String.format(Locale.US, "%.1f", r.durationSec) +
+                                " s • confidence " + r.signalQuality.confidence +
+                                "% • motion " + String.format(Locale.US, "%.2f", r.signalQuality.motionScore),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
                     }
                 }
             }
