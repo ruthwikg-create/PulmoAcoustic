@@ -270,11 +270,11 @@ private fun Guide() {
     LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Text("User Guide", style = MaterialTheme.typography.headlineSmall) }
         item { Text("1. Sit upright in a quiet room. For the research prototype, use bare upper-chest skin.") }
-        item { Text("2. Allow microphone permission.") }
+        item { Text("2. Allow microphone permission. Keep the phone speaker and microphone unobstructed.") }
         item { Text("3. Run Calibration once for the phone.") }
         item { Text("4. Run the Chest Scan. Move the phone to each suggested location; only test after you are steady.") }
         item { Text("5. Use the highest-scoring location. The app records the phone orientation during the best test.") }
-        item { Text("6. During measurement keep the phone about 40–60 cm away, keep still, and do not talk.") }
+        item { Text("6. During measurement keep the phone about 40–60 cm away, keep still, and do not talk. The exact distance is an experimental setup target, not a clinical ranging value.") }
         item { Text("7. Minor motion lowers confidence. Major motion rejects the measurement.") }
         item { Text("8. A result is shown only when multiple signal estimators agree and the quality gate passes.") }
         item { Text("9. This is a research prototype, not a medical device or replacement for clinical respiratory equipment.") }
@@ -341,7 +341,7 @@ private fun MeasurePage(
         Text("Duration: " + durationSec + " s • Target distance: about 40–60 cm")
         LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
         Button(onClick = onMeasure, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text(if (busy) "Measuring..." else "Start 30-second measurement")
+            Text(if (busy) "Measuring..." else "Start " + durationSec + "-second measurement")
         }
         Text(status)
         result?.let {
