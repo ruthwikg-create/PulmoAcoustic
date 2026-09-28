@@ -230,7 +230,7 @@ private fun WaveformView(samples: FloatArray, modifier: Modifier) {
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
         for (i in 1..4) drawLine(Color(0x223A4A66), Offset(0f, size.height * i / 5f), Offset(size.width, size.height * i / 5f), 1f)
-        drawPath(path, Color(0xFF63E6BE), strokeWidth = 3f)
+        drawPath(path, Color(0xFF63E6BE), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
     }
 }
 
