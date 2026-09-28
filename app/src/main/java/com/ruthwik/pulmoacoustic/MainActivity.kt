@@ -556,9 +556,15 @@ private fun ScanScreen(
                 }
             }
         }
+        item {
+            ChestPlacementGuide(
+                selected = selected,
+                tested = results.mapNotNull { point -> points.indexOf(point.label).takeIf { it >= 0 } }.toSet()
+            )
+        }
         item { Text("Chest points", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
         items(points.indices.toList()) { i ->
-            Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, border = if (selected == i) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
+            Card(onClick = { onPoint(i) }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, border = if (selected == i) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text((i + 1).toString(), fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
                     Column(Modifier.weight(1f)) {
