@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -533,6 +534,7 @@ private fun PulmoApp(
                     onScan = { if (!busy) screen = Screen.SCAN }
                 )
                 Screen.HISTORY -> HistoryScreen(history)
+                Screen.RESEARCH -> GuideScreen { screen = Screen.HOME }
                 Screen.SETTINGS -> SettingsScreen(
                     autoOptimize = autoOptimize,
                     researchCapture = researchCapture,
@@ -737,6 +739,37 @@ private fun ResultSummaryCard(result: RespiratoryResult) {
             Text("breaths / minute")
             HorizontalDivider()
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                MetricCell("Confidence", result.signalQuality.confidence.toString() + "%")
+                MetricCell("SNR", String.format(Locale.US, "%.1f dB", result.signalQuality.snrDb))
+                MetricCell("Motion", String.format(Locale.US, "%.2f", result.signalQuality.motionScore))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResultCard(result: RespiratoryResult) {
+    Card(shape = RoundedCornerShape(22.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if (result.signalQuality.valid) "Accepted measurement" else "Session not accepted",
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                result.respiratoryRateBpm?.let {
+                    String.format(Locale.US, "%.1f breaths/min", it)
+                } ?: "No trustworthy respiratory-rate value",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                result.message,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 MetricCell("Confidence", result.signalQuality.confidence.toString() + "%")
                 MetricCell("SNR", String.format(Locale.US, "%.1f dB", result.signalQuality.snrDb))
                 MetricCell("Motion", String.format(Locale.US, "%.2f", result.signalQuality.motionScore))
