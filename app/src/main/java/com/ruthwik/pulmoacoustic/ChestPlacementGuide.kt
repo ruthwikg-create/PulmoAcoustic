@@ -82,7 +82,7 @@ internal fun ChestPlacementGuide(
                         close()
                     }
                     drawPath(torso, color = subtle, style = Stroke(width = 2.4f, join = StrokeJoin.Round))
-                    drawLine(Offset(cx, h * 0.14f), Offset(cx, h * 0.78f), subtle, 1.8f)
+                    drawLine(color = subtle, start = Offset(cx, h * 0.14f), end = Offset(cx, h * 0.78f), strokeWidth = 1.8f)
                     for (r in 0..4) {
                         val yy = h * (0.22f + r * 0.095f)
                         drawArc(subtle, 195f, 150f, false, Offset(w * 0.24f, yy), Size(w * 0.52f, h * 0.18f), style = Stroke(width = 1.2f))
@@ -100,7 +100,7 @@ internal fun ChestPlacementGuide(
                     val phoneW = w * 0.15f
                     val phoneH = h * 0.17f
                     drawRoundRect(outline, Offset(phoneLeft, phoneTop), Size(phoneW, phoneH), CornerRadius(10f, 10f), style = Stroke(width = 2.2f))
-                    drawLine(Offset(phoneLeft + phoneW, phoneTop + phoneH * 0.34f), target, accent, 2.0f, cap = StrokeCap.Round)
+                    drawLine(color = accent, start = Offset(phoneLeft + phoneW, phoneTop + phoneH * 0.34f), end = target, strokeWidth = 2.0f, cap = StrokeCap.Round)
                 }
                 Text("PHONE • SPEAKER + MIC → CHEST", modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
