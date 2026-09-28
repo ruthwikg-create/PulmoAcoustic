@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.ruthwik.pulmoacoustic.ui.theme.PulmoTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -45,7 +47,7 @@ private val datasets = listOf(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { PulmoApp() }
+        setContent { PulmoTheme(darkTheme = isSystemInDarkTheme()) { PulmoApp() } }
     }
 }
 
