@@ -88,7 +88,6 @@ private val navItems = listOf(
     NavItem(Screen.HOME, Icons.Filled.Home),
     NavItem(Screen.MEASURE, Icons.Filled.Assessment),
     NavItem(Screen.HISTORY, Icons.Filled.History),
-    NavItem(Screen.RESEARCH, Icons.Filled.Dataset),
     NavItem(Screen.SETTINGS, Icons.Filled.Settings)
 )
 
