@@ -2,6 +2,7 @@ package com.ruthwik.pulmoacoustic.storage
 
 import android.content.Context
 import com.ruthwik.pulmoacoustic.model.RespiratoryResult
+import com.ruthwik.pulmoacoustic.model.SignalQuality
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -21,13 +22,21 @@ class MeasurementStore(context: Context) {
             put("agreementBpm", result.signalQuality.estimatorAgreementBpm)
             put("majorMovement", result.signalQuality.majorMovementDetected)
             put("carrierHz", result.carrierHz)
+            put("durationSec", result.durationSec)
             put("valid", result.signalQuality.valid)
+            put("message", result.message)
         }
         arr.put(obj)
-        prefs.edit().putString("items", arr.toString()).apply()
+
+        // Keep the newest 100 local sessions.
+        val start = (arr.length() - 100).coerceAtLeast(0)
+        val trimmed = JSONArray()
+        for (i in start until arr.length()) trimmed.put(arr.getJSONObject(i))
+
+        prefs.edit().putString("items", trimmed.toString()).apply()
     }
 
-    fun loadNewest(limit: Int = 30): List<RespiratoryResult> {
+    fun loadNewest(limit: Int = 100): List<RespiratoryResult> {
         val arr = JSONArray(prefs.getString("items", "[]"))
         val result = ArrayList<RespiratoryResult>()
         for (i in arr.length() - 1 downTo 0) {
@@ -36,7 +45,7 @@ class MeasurementStore(context: Context) {
             val rr = if (o.isNull("rr")) null else o.getDouble("rr")
             result += RespiratoryResult(
                 respiratoryRateBpm = rr,
-                signalQuality = com.ruthwik.pulmoacoustic.model.SignalQuality(
+                signalQuality = SignalQuality(
                     snrDb = o.optDouble("snr", -99.0),
                     periodicity = o.optDouble("periodicity", 0.0),
                     motionScore = o.optDouble("motion", 1.0),
@@ -47,9 +56,9 @@ class MeasurementStore(context: Context) {
                     estimatorAgreementBpm = o.optDouble("agreementBpm", 99.0),
                 ),
                 carrierHz = o.optDouble("carrierHz", 19_000.0),
-                durationSec = 30.0,
+                durationSec = o.optDouble("durationSec", 30.0),
                 timestampEpochMs = o.optLong("timestamp", 0L),
-                message = "Stored local measurement",
+                message = o.optString("message", "Stored local measurement"),
             )
         }
         return result
