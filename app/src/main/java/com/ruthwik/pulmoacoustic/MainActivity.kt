@@ -504,10 +504,35 @@ private fun PulmoApp(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (screen) {
-                Screen.HOME -> HomeScreen(history, calibrated, bestPosition, hasMic, onPrimary = { screen = Screen.MEASURE }, onCalibrate = { scope.launch { calibrate() } }, onScan = { screen = Screen.SCAN }, onGuide = { screen = Screen.GUIDE })
-                Screen.MEASURE -> MeasureScreen(progress, busy, status, bestPosition, bestOrientation, durationSec, result, onMeasure = { scope.launch { measure() } }, onScan = { screen = Screen.SCAN })
+                Screen.HOME -> HomeScreen(
+                    calibrated = calibrated,
+                    scanComplete = scanComplete,
+                    bestPosition = bestPosition,
+                    hasMic = hasMic,
+                    onContinue = {
+                        screen = when {
+                            !hasMic -> Screen.SETTINGS
+                            !calibrated -> Screen.SETTINGS
+                            !scanComplete -> Screen.SCAN
+                            else -> Screen.MEASURE
+                        }
+                    }
+                )
+                Screen.MEASURE -> MeasureScreen(
+                    busy = busy,
+                    stage = sessionStage,
+                    status = status,
+                    progress = progress,
+                    bestPosition = bestPosition,
+                    bestOrientation = bestOrientation,
+                    durationSec = durationSec,
+                    snapshot = liveSnapshot,
+                    result = result,
+                    onMeasure = { scope.launch { measure() } },
+                    onStop = { stopRequested.set(true) },
+                    onScan = { if (!busy) screen = Screen.SCAN }
+                )
                 Screen.HISTORY -> HistoryScreen(history)
-                Screen.RESEARCH -> ResearchScreen(context)
                 Screen.SETTINGS -> SettingsScreen(
                     autoOptimize = autoOptimize,
                     researchCapture = researchCapture,
@@ -519,13 +544,37 @@ private fun PulmoApp(
                     onAuto = { autoOptimize = it; prefs.edit().putBoolean("auto_optimize", it).apply() },
                     onResearchCapture = { researchCapture = it; prefs.edit().putBoolean("research_capture", it).apply() },
                     onDuration = { durationSec = it; prefs.edit().putInt("duration_sec", it).apply() },
-                    onCarrier = { carrier = it; prefs.edit().putFloat("carrier_hz", it.toFloat()).apply() },
+                    onCarrier = {
+                        carrier = it
+                        calibrated = false
+                        scanComplete = false
+                        prefs.edit()
+                            .putFloat("carrier_hz", it.toFloat())
+                            .putString("calibrated_device", "")
+                            .putBoolean("scan_complete", false)
+                            .apply()
+                    },
                     onGain = { gain = it; prefs.edit().putFloat("gain", it).apply() },
                     onThemeChange = onThemeChange,
                     onCalibrate = { scope.launch { calibrate() } }
                 )
                 Screen.GUIDE -> GuideScreen { screen = Screen.HOME }
-                Screen.SCAN -> ScanScreen(calibrated, carrier, bestPosition, scanPoints, selectedPoint, scanResults, busy, progress, status, onCalibrate = { scope.launch { calibrate() } }, onPoint = { selectedPoint = it }, onTest = { scope.launch { scan(scanPoints[selectedPoint]) } }, onBack = { screen = Screen.HOME })
+                Screen.SCAN -> ScanScreen(
+                    calibrated = calibrated,
+                    carrier = carrier,
+                    bestPosition = bestPosition,
+                    points = scanPoints,
+                    selected = selectedPoint,
+                    results = scanResults,
+                    busy = busy,
+                    progress = progress,
+                    status = status,
+                    onCalibrate = { if (!busy) scope.launch { calibrate() } },
+                    onPoint = { if (!busy) selectedPoint = it },
+                    onTest = { if (!busy) scope.launch { scan(scanPoints[selectedPoint]) } },
+                    onStop = { stopRequested.set(true) },
+                    onBack = { if (!busy) screen = Screen.HOME }
+                )
             }
         }
     }
