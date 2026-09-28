@@ -40,15 +40,20 @@ class AcousticEngine {
             rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT
         ) * 2).coerceAtLeast(8192)
 
+        val source = if (android.os.Build.VERSION.SDK_INT >= 24) {
+            runCatching { MediaRecorder.AudioSource.UNPROCESSED }.getOrDefault(MediaRecorder.AudioSource.MIC)
+        } else {
+            MediaRecorder.AudioSource.MIC
+        }
+
         val recorder = AudioRecord(
-            MediaRecorder.AudioSource.UNPROCESSED.takeIf {
-                android.os.Build.VERSION.SDK_INT >= 24
-            } ?: MediaRecorder.AudioSource.MIC,
+            source,
             rate,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
             inBuffer
         )
+        check(recorder.state == AudioRecord.STATE_INITIALIZED) { "Microphone could not be initialized" }
 
         val track = AudioTrack(
             AudioAttributes.Builder()
@@ -64,6 +69,8 @@ class AcousticEngine {
             AudioTrack.MODE_STREAM,
             AudioManager.AUDIO_SESSION_ID_GENERATE
         )
+
+        check(track.state == AudioTrack.STATE_INITIALIZED) { "Speaker audio could not be initialized" }
 
         val safeGain = outputGain.coerceIn(0.015f, 0.08f)
         val pcmChunk = ShortArray(2048)
@@ -96,9 +103,11 @@ class AcousticEngine {
                     if (p > 2.0 * PI) p -= 2.0 * PI
                 }
                 phase = p
-                track.write(pcmChunk, 0, pcmChunk.size)
+                val written = track.write(pcmChunk, 0, pcmChunk.size, AudioTrack.WRITE_BLOCKING)
+                check(written >= 0) { "Speaker write failed: " + written }
 
                 val n = recorder.read(scratch, 0, scratch.size, AudioRecord.READ_BLOCKING)
+                check(n >= 0) { "Microphone read failed: " + n }
                 if (n > 0) {
                     val copy = minOf(n, expected - writeIndex)
                     scratch.copyInto(captured, writeIndex, 0, copy)
