@@ -72,7 +72,8 @@ private val datasets = listOf(
     DatasetInfo("Respiratory Oximetry Apnoea 2026", "Airway pressure, flow and pulse-oximetry during simulated apnea.", "Apnea / reference", "Open", "https://physionet.org/content/respiratory-oximetry-apnoea/1.0.0/"),
     DatasetInfo("Comprehensive PSG Sleep", "PSG with respiratory effort, apnoea, desaturation and cardiac events.", "Sleep / events", "Open", "https://physionet.org/content/cps-dataset-sleep/1.0.0/"),
     DatasetInfo("MMWave Breathing + Heart", "Breathing and heart waveform data from non-contact sensing.", "Auxiliary non-contact", "Zenodo", "https://zenodo.org/records/7086410"),
-    DatasetInfo("MIMIC-III Waveform Matched Subset", "Large critical-care waveform set with respiratory/cardiorespiratory signals.", "Auxiliary / ICU", "Credentialed", "https://physionet.org/content/mimic3wdb-matched/1.0.0/")
+    DatasetInfo("MIMIC-III Waveform Matched Subset", "Large critical-care waveform set with respiratory/cardiorespiratory signals.", "Auxiliary / ICU", "Credentialed", "https://physionet.org/content/mimic3wdb-matched/1.0.0/"),
+    DatasetInfo("PhysioNet Respiratory Topic Index", "Discovery hub for additional current respiratory resources.", "Discovery hub", "Directory", "https://physionet.org/content/?topic=respiratory")
 )
 
 private data class NavItem(val screen: Screen, val icon: ImageVector)
