@@ -304,7 +304,7 @@ private fun PulmoApp() {
                         NavigationBarItem(
                             selected = screen == item.screen,
                             onClick = { screen = item.screen },
-                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            icon = { Icon(item.icon, contentDescription = item.screen.label) },
                             label = { Text(item.screen.label, fontSize = 11.sp) }
                         )
                     }
@@ -558,7 +558,7 @@ private fun ScanScreen(
         }
         item { Text("Chest points", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
         items(points.indices.toList()) { i ->
-            OutlinedCard(modifier = Modifier.fillMaxWidth(), border = if (selected == i) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
+            Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, border = if (selected == i) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text((i + 1).toString(), fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
                     Column(Modifier.weight(1f)) {
