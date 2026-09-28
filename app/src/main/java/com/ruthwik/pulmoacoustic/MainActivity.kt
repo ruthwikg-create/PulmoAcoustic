@@ -89,15 +89,42 @@ private val navItems = listOf(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            PulmoTheme(darkTheme = isSystemInDarkTheme()) { PulmoApp() }
-        }
+        setContent { PulmoRoot() }
+    }
+}
+
+@Composable
+private fun PulmoRoot() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("pulmo_settings", 0) }
+    val systemDark = isSystemInDarkTheme()
+    var darkTheme by remember {
+        mutableStateOf(
+            if (prefs.contains("dark_theme")) {
+                prefs.getBoolean("dark_theme", systemDark)
+            } else {
+                systemDark
+            }
+        )
+    }
+
+    PulmoTheme(darkTheme = darkTheme) {
+        PulmoApp(
+            darkTheme = darkTheme,
+            onThemeChange = { enabled ->
+                darkTheme = enabled
+                prefs.edit().putBoolean("dark_theme", enabled).apply()
+            }
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PulmoApp() {
+private fun PulmoApp(
+    darkTheme: Boolean,
+    onThemeChange: (Boolean) -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val engine = remember { AcousticEngine() }
@@ -318,7 +345,22 @@ private fun PulmoApp() {
                 Screen.MEASURE -> MeasureScreen(progress, busy, status, bestPosition, bestOrientation, durationSec, result, onMeasure = { scope.launch { measure() } }, onScan = { screen = Screen.SCAN })
                 Screen.HISTORY -> HistoryScreen(history)
                 Screen.RESEARCH -> ResearchScreen(context)
-                Screen.SETTINGS -> SettingsScreen(autoOptimize, researchCapture, durationSec, carrier, gain, calibrated, onAuto = { autoOptimize = it; prefs.edit().putBoolean("auto_optimize", it).apply() }, onResearchCapture = { researchCapture = it; prefs.edit().putBoolean("research_capture", it).apply() }, onDuration = { durationSec = it; prefs.edit().putInt("duration_sec", it).apply() }, onCarrier = { carrier = it; prefs.edit().putFloat("carrier_hz", it.toFloat()).apply() }, onGain = { gain = it; prefs.edit().putFloat("gain", it).apply() }, onCalibrate = { scope.launch { calibrate() } })
+                Screen.SETTINGS -> SettingsScreen(
+                    autoOptimize = autoOptimize,
+                    researchCapture = researchCapture,
+                    durationSec = durationSec,
+                    carrier = carrier,
+                    gain = gain,
+                    calibrated = calibrated,
+                    darkTheme = darkTheme,
+                    onAuto = { autoOptimize = it; prefs.edit().putBoolean("auto_optimize", it).apply() },
+                    onResearchCapture = { researchCapture = it; prefs.edit().putBoolean("research_capture", it).apply() },
+                    onDuration = { durationSec = it; prefs.edit().putInt("duration_sec", it).apply() },
+                    onCarrier = { carrier = it; prefs.edit().putFloat("carrier_hz", it.toFloat()).apply() },
+                    onGain = { gain = it; prefs.edit().putFloat("gain", it).apply() },
+                    onThemeChange = onThemeChange,
+                    onCalibrate = { scope.launch { calibrate() } }
+                )
                 Screen.GUIDE -> GuideScreen { screen = Screen.HOME }
                 Screen.SCAN -> ScanScreen(calibrated, carrier, bestPosition, scanPoints, selectedPoint, scanResults, busy, progress, status, onCalibrate = { scope.launch { calibrate() } }, onPoint = { selectedPoint = it }, onTest = { scope.launch { scan(scanPoints[selectedPoint]) } }, onBack = { screen = Screen.HOME })
             }
@@ -682,11 +724,13 @@ private fun SettingsScreen(
     carrier: Double,
     gain: Float,
     calibrated: Boolean,
+    darkTheme: Boolean,
     onAuto: (Boolean) -> Unit,
     onResearchCapture: (Boolean) -> Unit,
     onDuration: (Int) -> Unit,
     onCarrier: (Double) -> Unit,
     onGain: (Float) -> Unit,
+    onThemeChange: (Boolean) -> Unit,
     onCalibrate: () -> Unit
 ) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -696,6 +740,16 @@ private fun SettingsScreen(
             Text("Automatic optimization should remain on for normal use.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item { SettingToggleCard(Icons.Filled.AutoAwesome, "Automatic optimization", "Select a strong supported acoustic configuration.", autoOptimize, onAuto) }
+        item {
+            SettingToggleCard(
+                icon = if (darkTheme) Icons.Filled.DarkMode else Icons.Filled.LightMode,
+                title = "Dark mode",
+                subtitle = if (darkTheme) "Black interface with white typography." else "White interface with black typography.",
+                checked = darkTheme,
+                onCheckedChange = onThemeChange
+            )
+        }
+
         item {
             OutlinedCard {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
