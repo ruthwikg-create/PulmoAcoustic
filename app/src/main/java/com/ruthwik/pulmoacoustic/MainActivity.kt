@@ -934,18 +934,34 @@ private fun ScanScreen(
     onCalibrate: () -> Unit,
     onPoint: (Int) -> Unit,
     onTest: () -> Unit,
+    onStop: () -> Unit,
     onBack: () -> Unit
 ) {
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val tested = results.mapNotNull { point ->
+        points.indexOf(point.label).takeIf { it >= 0 }
+    }.toSet()
+
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         item {
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
+                IconButton(onClick = onBack, enabled = !busy) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                }
                 Column {
                     Text("Guided chest scan", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                     Text("Find the cleanest acoustic response.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+        }
+        item {
+            ChestPlacementGuide(
+                selected = selected,
+                tested = tested
+            )
         }
         item {
             OutlinedCard {
@@ -955,8 +971,15 @@ private fun ScanScreen(
                         AssistChip(onClick = {}, label = { Text(carrier.roundToInt().toString() + " Hz") })
                     }
                     Text("Best location: " + bestPosition, fontWeight = FontWeight.SemiBold)
-                    Text("Move to a point, hold steady, then test. Repositioning motion is not treated as the point's respiratory signal.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedButton(onClick = onCalibrate, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "Move to a point, hold steady, then test. Rapid movement stops the point test automatically.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = onCalibrate,
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Icon(Icons.Filled.Tune, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("Calibrate device")
@@ -965,34 +988,55 @@ private fun ScanScreen(
             }
         }
         item {
-            ChestPlacementGuide(
-                selected = selected,
-                tested = results.mapNotNull { point -> points.indexOf(point.label).takeIf { it >= 0 } }.toSet()
-            )
+            Text("Chest points", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
-        item { Text("Chest points", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
         items(points.indices.toList()) { i ->
-            Card(onClick = { onPoint(i) }, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, border = if (selected == i) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null) {
+            Card(
+                onClick = { if (!busy) onPoint(i) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                border = if (selected == i) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+            ) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text((i + 1).toString(), fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
                     Column(Modifier.weight(1f)) {
                         Text(points[i], fontWeight = FontWeight.Medium)
-                        val tested = results.firstOrNull { it.label == points[i] }
+                        val testedPoint = results.firstOrNull { it.label == points[i] }
                         Text(
-                            tested?.let {
-                                "Quality " + it.qualityScore.roundToInt() + "/100 • SNR " + String.format(Locale.US, "%.1f", it.snrDb) + " dB"
+                            testedPoint?.let {
+                                "Quality " + it.qualityScore.roundToInt() +
+                                    "/100 • SNR " + String.format(Locale.US, "%.1f", it.snrDb) + " dB"
                             } ?: "Not tested yet",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp
                         )
                     }
-                    if (selected == i) Icon(Icons.Filled.RadioButtonChecked, contentDescription = "Selected")
+                    if (tested.contains(i)) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = "Tested")
+                    }
                 }
             }
         }
         item {
-            Button(onClick = onTest, enabled = !busy && calibrated, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) {
+            Button(
+                onClick = onTest,
+                enabled = !busy && calibrated,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
                 Text(if (busy) "Testing selected point..." else "I'm ready — test selected point")
+            }
+        }
+        if (busy) {
+            item {
+                OutlinedButton(
+                    onClick = onStop,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.Stop, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Stop scan")
+                }
             }
         }
         item {
