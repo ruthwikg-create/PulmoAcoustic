@@ -518,6 +518,7 @@ private fun PulmoApp(
                     }
                 )
                 Screen.MEASURE -> MeasureScreen(
+                    carrier = carrier,
                     busy = busy,
                     stage = sessionStage,
                     status = status,
@@ -754,6 +755,7 @@ private fun MetricCell(label: String, value: String) {
 
 @Composable
 private fun MeasureScreen(
+    carrier: Double,
     busy: Boolean,
     stage: String,
     status: String,
@@ -774,7 +776,7 @@ private fun MeasureScreen(
         item {
             Spacer(Modifier.height(12.dp))
             Text("Measurement", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            Text(stage, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stage + " • carrier " + carrier.roundToInt() + " Hz", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
             OutlinedCard {
