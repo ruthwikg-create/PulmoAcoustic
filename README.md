@@ -40,6 +40,10 @@ Build the most reliable smartphone-only respiratory-rate prototype possible, the
 - Optional raw WAV capture for supervised research
 - Curated public respiratory/cardiorespiratory dataset hub
 - GitHub Actions debug-APK build
+- Professional minimal black/white Material 3 UI
+- Adaptive home, measurement, history, research and settings navigation
+- Curated 19-source respiratory/cardiorespiratory dataset hub
+- Dataset roles and modality labels to avoid mixing incompatible training data
 - In-app operating guide
 
 ## Recommended first-use procedure
