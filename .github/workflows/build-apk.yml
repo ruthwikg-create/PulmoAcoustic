@@ -1,9 +1,9 @@
-name: Build CardioSonic APK
+name: Build PulmoAcoustic APK
 
 on:
   workflow_dispatch:
   push:
-    branches: ["main", "cardio-acoustic-app"]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
@@ -35,7 +35,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: CardioSonic-debug-apk
+          name: PulmoAcoustic-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -43,7 +43,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: CardioSonic-build-reports
+          name: PulmoAcoustic-lint-and-build-reports
           path: |
             app/build/reports/**
             app/build/outputs/logs/**
