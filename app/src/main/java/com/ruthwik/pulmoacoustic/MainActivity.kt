@@ -582,77 +582,131 @@ private fun PulmoApp(
 
 @Composable
 private fun HomeScreen(
-    history: List<RespiratoryResult>,
     calibrated: Boolean,
+    scanComplete: Boolean,
     bestPosition: String,
     hasMic: Boolean,
-    onPrimary: () -> Unit,
-    onCalibrate: () -> Unit,
-    onScan: () -> Unit,
-    onGuide: () -> Unit
+    onContinue: () -> Unit
 ) {
-    val last = history.firstOrNull()
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val completed = listOf(hasMic, calibrated, scanComplete).count { it }
+    val action = when {
+        !hasMic -> "Grant microphone permission"
+        !calibrated -> "Calibrate this phone"
+        !scanComplete -> "Optimize chest position"
+        else -> "Start measurement"
+    }
+
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Contactless respiratory monitoring", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            Text("Phone-only sensing using your built-in speaker + microphone.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Contactless respiratory monitoring",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                "A guided measurement workflow using your phone speaker and microphone.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         item {
-            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Research measurement", fontWeight = FontWeight.Medium)
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.onSurface,
+                contentColor = MaterialTheme.colorScheme.background,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    Modifier.padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text("Setup progress", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        completed.toString() + " / 3 ready",
+                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.70f)
+                    )
+                    Button(
+                        onClick = onContinue,
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.background,
+                            contentColor = MaterialTheme.colorScheme.onBackground
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(action, fontWeight = FontWeight.SemiBold)
                     }
-                    Button(onClick = onPrimary, modifier = Modifier.fillMaxWidth().height(54.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground), shape = RoundedCornerShape(16.dp)) {
-                        Text("Start measurement", fontWeight = FontWeight.SemiBold)
-                    }
-                    Text("Automatic calibration • chest scan • motion rejection • confidence gate", color = MaterialTheme.colorScheme.background.copy(alpha = 0.70f), style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        if (scanComplete) "Best chest location: " + bestPosition
+                        else "The app will guide you through the remaining setup.",
+                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.70f),
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
-        item { Text("Setup status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
-        item { StatusCard("Microphone", if (hasMic) "Ready" else "Permission required", Icons.Filled.Mic, hasMic) }
-        item { StatusCard("Phone calibration", if (calibrated) "Complete" else "Not calibrated", Icons.Filled.Tune, calibrated) }
-        item { StatusCard("Chest position", if (bestPosition != "Not scanned") bestPosition else "Scan required", Icons.Filled.LocationOn, bestPosition != "Not scanned") }
+        item {
+            SetupStepCard("1", "Microphone", if (hasMic) "Ready" else "Permission required", hasMic)
+        }
+        item {
+            SetupStepCard("2", "Phone calibration", if (calibrated) "Complete" else "Required", calibrated)
+        }
+        item {
+            SetupStepCard(
+                "3",
+                "Chest-position optimization",
+                if (scanComplete) bestPosition else "Not completed",
+                scanComplete
+            )
+        }
         item {
             OutlinedCard {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.AutoAwesome, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Adaptive setup", fontWeight = FontWeight.SemiBold)
-                    }
-                    Text("The app searches safe acoustic settings and ranks chest positions by signal quality before measuring.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AssistChip(onClick = onCalibrate, label = { Text("Calibrate") })
-                        AssistChip(onClick = onScan, label = { Text("Chest scan") })
-                    }
-                }
-            }
-        }
-        if (last != null) {
-            item { Text("Latest accepted measurement", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
-            item { ResultSummaryCard(last) }
-        }
-        item {
-            OutlinedCard {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Info, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Best-practice setup", fontWeight = FontWeight.SemiBold)
-                    }
-                    Text("Quiet room • seated • bare upper chest for the initial protocol • phone unobstructed • stay still.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = onGuide) { Text("Open full guide") }
+                    Text("What the app uses", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Speaker + microphone • accelerometer + gyroscope • I/Q demodulation • spectral + autocorrelation + peak respiratory estimators • motion quality gate.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
         item {
-            Text("Research prototype • not a diagnostic device", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
-            Spacer(Modifier.height(8.dp))
+            Text(
+                "Research datasets stay in the project/research pipeline and are not exposed in the normal user workflow.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun SetupStepCard(number: String, title: String, value: String, complete: Boolean) {
+    OutlinedCard {
+        Row(
+            Modifier.fillMaxWidth().padding(15.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.onSurface,
+                contentColor = MaterialTheme.colorScheme.background
+            ) {
+                Text(number, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp), fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Medium)
+                Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            }
+            Icon(
+                if (complete) Icons.Filled.CheckCircle else Icons.Filled.ChevronRight,
+                contentDescription = null
+            )
         }
     }
 }
