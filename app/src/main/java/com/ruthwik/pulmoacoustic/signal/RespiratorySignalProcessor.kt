@@ -26,7 +26,8 @@ class RespiratorySignalProcessor {
             return SignalAnalysis(null, -99.0, 0.0, 0.0, 99.0, 0, false)
         }
 
-        val block = 480.coerceAtMost(samples.size / 10)
+        val carrierCycles = samplesPerCarrierPeriod(sampleRate, carrierHz).coerceAtLeast(1)
+        val block = (carrierCycles * 10).coerceAtMost(samples.size / 10).coerceAtLeast(carrierCycles)
         val blockRate = sampleRate.toDouble() / block
         val count = samples.size / block
 
@@ -70,15 +71,19 @@ class RespiratorySignalProcessor {
 
         val spectral = dominantFrequency(resampled, 20.0, rrRangeHz)
         val autocorr = autocorrelationPeak(resampled, 20.0, rrRangeHz)
-        val agreement = if (spectral != null && autocorr != null) {
-            abs(spectral - autocorr) * 60.0
+        val peak = peakFrequency(resampled, 20.0, rrRangeHz)
+        val estimates = listOfNotNull(spectral, autocorr, peak)
+        val agreement = if (estimates.size >= 2) {
+            (estimates.maxOrNull()!! - estimates.minOrNull()!!) * 60.0
         } else 99.0
 
         val rrHz = when {
-            spectral != null && autocorr != null && agreement <= 3.0 ->
-                0.6 * spectral + 0.4 * autocorr
-            spectral != null -> spectral
-            else -> autocorr
+            estimates.isEmpty() -> null
+            estimates.size == 1 -> estimates.first()
+            else -> estimates.sorted().let { sorted ->
+                val median = sorted[sorted.lastIndex / 2]
+                0.55 * median + 0.25 * (spectral ?: median) + 0.20 * (autocorr ?: median)
+            }
         }
 
         val rr = rrHz?.times(60.0)
@@ -131,6 +136,41 @@ class RespiratorySignalProcessor {
             if (phase > 2.0 * PI) phase -= 2.0 * PI
         }
         return hypot(iAcc / n, qAcc / n)
+    }
+
+    private fun samplesPerCarrierPeriod(sampleRate: Int, carrierHz: Double): Int {
+        val carrierInt = carrierHz.roundToInt().coerceAtLeast(1)
+        var a = sampleRate
+        var b = carrierInt
+        while (b != 0) {
+            val tmp = a % b
+            a = b
+            b = tmp
+        }
+        return sampleRate / a.coerceAtLeast(1)
+    }
+
+    private fun peakFrequency(x: DoubleArray, fs: Double, range: ClosedFloatingPointRange<Double>): Double? {
+        if (x.size < 3) return null
+        val mean = x.average()
+        val std = sqrt(x.map { (it - mean).pow(2) }.average()).coerceAtLeast(1e-9)
+        val threshold = mean + 0.35 * std
+        val minDistance = ceil(fs / range.endInclusive).toInt().coerceAtLeast(1)
+        val peaks = ArrayList<Int>()
+        var last = -minDistance
+        for (i in 1 until x.lastIndex) {
+            if (i - last < minDistance) continue
+            if (x[i] > x[i - 1] && x[i] >= x[i + 1] && x[i] >= threshold) {
+                peaks += i
+                last = i
+            }
+        }
+        if (peaks.size < 2) return null
+        val intervals = peaks.zipWithNext { a, b -> b - a }.filter { it > 0 }.sorted()
+        if (intervals.isEmpty()) return null
+        val median = intervals[intervals.lastIndex / 2].toDouble()
+        val f = fs / median
+        return if (f in range) f else null
     }
 
     private fun detrend(x: DoubleArray): DoubleArray {
