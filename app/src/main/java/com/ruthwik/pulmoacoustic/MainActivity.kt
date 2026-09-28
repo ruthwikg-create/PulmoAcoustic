@@ -254,7 +254,12 @@ fun PulmoApp() {
                 }
                 3 -> HistoryPage(history)
                 4 -> DataPage(context)
-                else -> SettingsPage(autoOptimize, researchCapture, durationSec, carrier, gain, calibrated,\n                    onAuto = { autoOptimize = it; prefs.edit().putBoolean("auto_optimize", it).apply() },\n                    onResearchCapture = { researchCapture = it; prefs.edit().putBoolean("research_capture", it).apply() },\n                    onDuration = { durationSec = it; prefs.edit().putInt("duration_sec", it).apply() },\n                    onCarrier = { carrier = it; prefs.edit().putFloat("carrier_hz", it.toFloat()).apply() },\n                    onGain = { gain = it; prefs.edit().putFloat("gain", it).apply() })
+                else -> SettingsPage(autoOptimize, researchCapture, durationSec, carrier, gain, calibrated,
+                    onAuto = { autoOptimize = it; prefs.edit().putBoolean("auto_optimize", it).apply() },
+                    onResearchCapture = { researchCapture = it; prefs.edit().putBoolean("research_capture", it).apply() },
+                    onDuration = { durationSec = it; prefs.edit().putInt("duration_sec", it).apply() },
+                    onCarrier = { carrier = it; prefs.edit().putFloat("carrier_hz", it.toFloat()).apply() },
+                    onGain = { gain = it; prefs.edit().putFloat("gain", it).apply() })
             }
         }
     }
