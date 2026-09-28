@@ -97,7 +97,7 @@ class CardiacSignalProcessor(private val sampleRate: Int = 16000) {
 
     private fun estimateBpm(): Int? {
         if (recentPeaks.size < 3) return null
-        val intervals = recentPeaks.zipWithNext { a, b -> b - a }.filter { it in sampleRate * 0.35..sampleRate * 1.8 }
+        val intervals = recentPeaks.zipWithNext { a, b -> b - a }.filter { it.toDouble() in sampleRate * 0.35..sampleRate * 1.8 }
         if (intervals.size < 2) return null
         val sorted = intervals.sorted()
         val median = sorted[sorted.size / 2].toDouble()
